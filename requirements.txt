@@ -1,0 +1,5 @@
+Flask==2.3.2
+cryptography==39.0.1
+aiohttp==3.8.1
+beautifulsoup4==4.12.2
+flask-compress==1.12
