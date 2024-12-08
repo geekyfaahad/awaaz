@@ -10,6 +10,7 @@ click==8.1.7
 colorama==0.4.6
 cryptography==44.0.0
 Flask==3.1.0
+Flask[async]==2.3.2
 Flask-Compress==1.17
 frozenlist==1.5.0
 idna==3.10
