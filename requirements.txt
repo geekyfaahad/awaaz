@@ -3,5 +3,5 @@ cryptography==39.0.1
 aiohttp==3.8.1
 beautifulsoup4==4.12.2
 flask-compress==1.12
-gunicorn==23.0.0
-pip==24.3.1
+gunicorn==20.1.1
+pip>=22.3,<25
