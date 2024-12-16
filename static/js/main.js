@@ -32,7 +32,7 @@ domains.forEach(domain => {
 function checkInternetConnection() {
   const checkConnection = async () => {
     try {
-      const response = await fetch("https://www.google.com/favicon.ico", {
+      const response = await fetch("https://www.google.com", {
         method: "HEAD",
         cache: "no-cache",
       });
