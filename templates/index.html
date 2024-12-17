@@ -30,28 +30,27 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function checkInternetConnection() {
-  const checkConnection = async () => {
-    try {
-      const response = await fetch("https://awaaz.onrender.com", {
-        method: "HEAD",
-        cache: "no-cache",
-      });
-      if (response.ok) {
-        console.log("Internet connection is active.");
-      } else {
-        console.warn("Internet connection seems to be offline.");
-      }
-    } catch (error) {
-      console.error("No internet connection or request failed.", error);
-    }
-  };
+const URL = "https://awaaz.onrender.com";  // Replace with your Render app URL
 
-  checkConnection(); // Initial check
-  setInterval(checkConnection, 14 * 60 * 1000); // 14 minutes in milliseconds
+// Interval time in milliseconds (600 seconds = 10 minutes)
+const INTERVAL = 600000;
+
+function pingApp() {
+    fetch(URL)
+        .then(response => {
+            if (response.ok) {
+                console.log(`Ping successful: ${response.status}`);
+            } else {
+                console.log(`Ping failed: ${response.status}`);
+            }
+        })
+        .catch(error => {
+            console.error(`Error pinging app: ${error}`);
+        });
 }
 
-checkInternetConnection();
+setInterval(pingApp, INTERVAL);
+
 </script>
 </body>
 </html>
