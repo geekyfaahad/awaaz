@@ -121,4 +121,7 @@
 - **URL Encryption:** News article URLs are encrypted before storage
 - **Error Handling:** Robust error handling to prevent data leaks
 - **Rate Limiting:** Implements API rate limiting to prevent abuse
+- 
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/4M0XiQqS-ds?si=glDhjSFzJ7HKr4yg" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
