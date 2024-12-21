@@ -42,8 +42,7 @@
   - `BeautifulSoup`
   - `Flask-Compress`
   - `cryptography`
-  - 'Flask[async]
-  - 
+  - 'Flask[async]`
 ## Installation
 
 ### Prerequisites
