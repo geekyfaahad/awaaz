@@ -328,10 +328,16 @@ def results():
     except Exception as e:
         logger.error(f"Error in /results route: {e}")
         return render_template("error.html", error_message="An error occurred while fetching results.")
-@app.route('/keep-alive')
 def keep_alive():
-    return "OK", 200
+    while True:
+        try:
+            requests.get("http://127.0.0.1:55100")
+            print("success")
+        except:
+            logger.warning("Ping failed")
+        time.sleep(60)
 
+Thread(target=keep_alive, daemon=True).start()
 if __name__ == "__main__":
     app.run(debug=True, port=55100,host='0.0.0.0')
     
