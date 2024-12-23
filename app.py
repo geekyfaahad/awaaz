@@ -214,13 +214,14 @@ import asyncio
 from bs4 import BeautifulSoup
 from flask_compress import Compress
 import logging
-import os
+from threading import Thread
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 Compress(app)
+
 def get_time_range(user_choice):
     time_ranges = {
         "rf": "h,sbd:1",  # Recent news (last hour)
@@ -230,6 +231,8 @@ def get_time_range(user_choice):
         "yn": "y",  # News from the past year
     }
     return time_ranges.get(user_choice, "")
+
+
 def load_key():
     try:
         with open("encryption_key.key", "rb") as key_file:
@@ -240,6 +243,7 @@ def load_key():
     except Exception as e:
         logger.error(f"Error loading encryption key: {e}")
         raise
+
 def decrypt_url(encrypted_url, key):
     try:
         cipher = Fernet(key)
@@ -247,6 +251,7 @@ def decrypt_url(encrypted_url, key):
     except Exception as e:
         logger.error(f"Error decrypting URL: {e}")
         raise
+
 async def fetch_news(time_range):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36"
@@ -305,17 +310,12 @@ async def fetch_news(time_range):
         logger.error(f"An unexpected error occurred: {e}")
         return []
 
-@app.route('/keep-alive')
-def keep_alive():
-    return "OK", 200
-
-# Non-blocking sleep
 @app.route("/")
 def index():
     return render_template("index.html")
 
 @app.route("/results", methods=["GET", "POST"])
-async def results():
+def results():
     try:
         if request.method == "POST":
             user_choice = request.form.get("filter")
@@ -323,11 +323,14 @@ async def results():
             user_choice = "rf"
 
         time_range = get_time_range(user_choice)
-        news_data = await fetch_news(time_range)
+        news_data = asyncio.run(fetch_news(time_range))
         return render_template("results.html", news_data=news_data)
     except Exception as e:
         logger.error(f"Error in /results route: {e}")
         return render_template("error.html", error_message="An error occurred while fetching results.")
+@app.route('/keep-alive')
+def keep_alive():
+    return "OK", 200
 
 if __name__ == "__main__":
     app.run(debug=True, port=55100)
