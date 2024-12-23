@@ -305,19 +305,7 @@ async def fetch_news(time_range):
         logger.error(f"An unexpected error occurred: {e}")
         return []
 
-async def pinging():
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://awaaz.onrender.com/") as response:
-                    logger.info(f"Pinging response status: {response.status}")
-        except Exception as e:
-            logger.error(f"Pinging failed: {e}")
-        await asyncio.sleep(10)  # Non-blocking sleep
-
-def start_pinging_task():
-    asyncio.run(pinging())
-
+# Non-blocking sleep
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -338,8 +326,6 @@ async def results():
         return render_template("error.html", error_message="An error occurred while fetching results.")
 
 if __name__ == "__main__":
-    pinging_thread = Thread(target=start_pinging_task, daemon=True)
-    pinging_thread.start()
     app.run(debug=True, port=55100)
     
 
