@@ -29,28 +29,5 @@
         </form>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-const URL = "https://awaaz.onrender.com";  // Replace with your Render app URL
-
-// Interval time in milliseconds (600 seconds = 10 minutes)
-const INTERVAL = 600000;
-
-function pingApp() {
-    fetch(URL)
-        .then(response => {
-            if (response.ok) {
-                console.log(`Ping successful: ${response.status}`);
-            } else {
-                console.log(`Ping failed: ${response.status}`);
-            }
-        })
-        .catch(error => {
-            console.error(`Error pinging app: ${error}`);
-        });
-}
-
-setInterval(pingApp, INTERVAL);
-
-</script>
 </body>
 </html>
