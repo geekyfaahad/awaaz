@@ -305,6 +305,10 @@ async def fetch_news(time_range):
         logger.error(f"An unexpected error occurred: {e}")
         return []
 
+@app.route('/keep-alive')
+def keep_alive():
+    return "OK", 200
+
 # Non-blocking sleep
 @app.route("/")
 def index():
