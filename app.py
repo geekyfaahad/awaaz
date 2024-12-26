@@ -273,7 +273,7 @@ async def fetch_news(time_range):
                 soup = BeautifulSoup(html_content, "html.parser")
                 news_items = soup.find_all("div", class_="SoAPf")
                 excluded_keywords = [
-                    "Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives","Todays Paper"
+                    "Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives","Todays Paper","Articles Written By"
                 ]
 
                 results = []
