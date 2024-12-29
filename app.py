@@ -207,7 +207,7 @@
 
 # aiohttp code
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 from cryptography.fernet import Fernet
 import aiohttp
 import asyncio
@@ -215,12 +215,38 @@ from bs4 import BeautifulSoup
 from flask_compress import Compress
 import logging
 from threading import Thread
+import time
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 Compress(app)
+
+rate_limit = 5
+rate_limit_window = 43200
+request_counts = defaultdict(lambda: {"count": 0, "reset_time": datetime.now()})
+
+def get_client_ip():
+    """Retrieve the IP address of the client."""
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0]
+    return request.remote_addr
+
+def is_rate_limited(ip):
+    """Check if the IP address has exceeded the rate limit."""
+    now = datetime.now()
+    if now >= request_counts[ip]["reset_time"]:
+        # Reset the count and the time window
+        request_counts[ip]["count"] = 0
+        request_counts[ip]["reset_time"] = now + timedelta(seconds=rate_limit_window)
+
+    request_counts[ip]["count"] += 1
+    if request_counts[ip]["count"] > rate_limit:
+        return True
+    return False
 
 def get_time_range(user_choice):
     time_ranges = {
@@ -231,7 +257,6 @@ def get_time_range(user_choice):
         "yn": "y",  # News from the past year
     }
     return time_ranges.get(user_choice, "")
-
 
 def load_key():
     try:
@@ -273,7 +298,7 @@ async def fetch_news(time_range):
                 soup = BeautifulSoup(html_content, "html.parser")
                 news_items = soup.find_all("div", class_="SoAPf")
                 excluded_keywords = [
-                    "Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives","Todays Paper","Articles Written By","LATEST NEWS"
+                    "Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives", "Todays Paper", "Articles Written By", "LATEST NEWS"
                 ]
 
                 results = []
@@ -316,6 +341,10 @@ def index():
 
 @app.route("/results", methods=["GET", "POST"])
 def results():
+    ip = get_client_ip()
+    if is_rate_limited(ip):
+        return jsonify({"error": "Rate limit exceeded. Please wait and try again later."}), 429
+
     try:
         if request.method == "POST":
             user_choice = request.form.get("filter")
@@ -328,6 +357,7 @@ def results():
     except Exception as e:
         logger.error(f"Error in /results route: {e}")
         return render_template("error.html", error_message="An error occurred while fetching results.")
+
 def keep_alive():
     while True:
         try:
@@ -338,9 +368,9 @@ def keep_alive():
         time.sleep(60)
 
 Thread(target=keep_alive, daemon=True).start()
+
 if __name__ == "__main__":
-    app.run(debug=True, port=55100,host='0.0.0.0')
-    
+    app.run(debug=True, port=55100, host='0.0.0.0')
 
 
 # httpx code
