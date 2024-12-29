@@ -218,6 +218,7 @@ from threading import Thread
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
+import requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -226,7 +227,7 @@ app = Flask(__name__)
 Compress(app)
 
 rate_limit = 5
-rate_limit_window = 43200
+rate_limit_window = 43200  # 12 hours in seconds
 request_counts = defaultdict(lambda: {"count": 0, "reset_time": datetime.now()})
 
 def get_client_ip():
@@ -239,7 +240,6 @@ def is_rate_limited(ip):
     """Check if the IP address has exceeded the rate limit."""
     now = datetime.now()
     if now >= request_counts[ip]["reset_time"]:
-        # Reset the count and the time window
         request_counts[ip]["count"] = 0
         request_counts[ip]["reset_time"] = now + timedelta(seconds=rate_limit_window)
 
@@ -334,6 +334,8 @@ async def fetch_news(time_range):
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}")
         return []
+    except ConnectionError as e:
+        return []
 
 @app.route("/")
 def index():
@@ -343,8 +345,16 @@ def index():
 def results():
     ip = get_client_ip()
     if is_rate_limited(ip):
-        return jsonify({"error": "Rate limit exceeded. Please wait and try again later."}), 429
+        response = {
+            'error': 'Rate limit exceeded',
+            'message': 'Please wait and try again later.You can check the real-time limit status of yours at this endpoint /rate_limit_status',
+            'status_code': 429
+        }
+        return jsonify(response), 429
 
+        # return jsonify({"error": "Rate limit exceeded. Please wait and try again later."}), 429
+        
+        # return "Error\nRate limit exceeded. Please wait and try again later\nYou can the real time limit status of yours at this endpoint  /rate_limit_status"
     try:
         if request.method == "POST":
             user_choice = request.form.get("filter")
@@ -357,6 +367,21 @@ def results():
     except Exception as e:
         logger.error(f"Error in /results route: {e}")
         return render_template("error.html", error_message="An error occurred while fetching results.")
+
+@app.route("/rate_limit_status")
+def rate_limit_status():
+    ip = get_client_ip()
+    now = datetime.now()
+
+    if ip in request_counts:
+        reset_time = request_counts[ip]["reset_time"]
+        if now >= reset_time:
+            return jsonify({"message": "Rate limit has reset.", "time_remaining": "0 seconds"})
+        else:
+            time_remaining = reset_time - now
+            return jsonify({"time_remaining": str(time_remaining)})
+    else:
+        return jsonify({"message": "No rate limit for this IP.", "time_remaining": "0 seconds"})
 
 def keep_alive():
     while True:
@@ -371,6 +396,7 @@ Thread(target=keep_alive, daemon=True).start()
 
 if __name__ == "__main__":
     app.run(debug=True, port=55100, host='0.0.0.0')
+
 
 
 # httpx code
