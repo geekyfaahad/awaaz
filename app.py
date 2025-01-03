@@ -214,11 +214,11 @@ import asyncio
 from bs4 import BeautifulSoup
 from flask_compress import Compress
 import logging
-from threading import Thread
+from threading import Thread, Lock
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
-import requests
+import atexit
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -229,6 +229,7 @@ Compress(app)
 rate_limit = 5
 rate_limit_window = 43200  # 12 hours in seconds
 request_counts = defaultdict(lambda: {"count": 0, "reset_time": datetime.now()})
+lock = Lock()
 
 def get_client_ip():
     """Retrieve the IP address of the client."""
@@ -237,16 +238,34 @@ def get_client_ip():
     return request.remote_addr
 
 def is_rate_limited(ip):
-    """Check if the IP address has exceeded the rate limit."""
     now = datetime.now()
-    if now >= request_counts[ip]["reset_time"]:
-        request_counts[ip]["count"] = 0
-        request_counts[ip]["reset_time"] = now + timedelta(seconds=rate_limit_window)
+    with lock:
+        if now >= request_counts[ip]["reset_time"]:
+            request_counts[ip]["count"] = 1  # Reset count with current request
+            request_counts[ip]["reset_time"] = now + timedelta(seconds=rate_limit_window)
+            return False
+        else:
+            request_counts[ip]["count"] += 1
+            if request_counts[ip]["count"] > rate_limit:
+                return True
+        return False
 
-    request_counts[ip]["count"] += 1
-    if request_counts[ip]["count"] > rate_limit:
-        return True
-    return False
+def cleanup_request_counts():
+    now = datetime.now()
+    to_remove = [ip for ip, data in request_counts.items() if now >= data["reset_time"] and data["count"] == 0]
+    for ip in to_remove:
+        del request_counts[ip]
+
+def start_cleanup():
+    while True:
+        cleanup_request_counts()
+        time.sleep(3600)  # Clean up every hour
+
+cleanup_thread = Thread(target=start_cleanup)
+cleanup_thread.daemon = True
+cleanup_thread.start()
+
+atexit.register(cleanup_request_counts)
 
 def get_time_range(user_choice):
     time_ranges = {
@@ -281,7 +300,6 @@ async def fetch_news(time_range):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36"
     }
-
     try:
         key = load_key()
         encrypted_url = b'gAAAAABnVfRNOQIbQcd2dYcU5a0v2GCKJkqlSFPLzgj49Z90Aeo94cbSrsxeBHiChsE2zPmsb4uLTh641fimwZxa3lN_LTOQ0Oo000Qm_c5dVyU7lut0WpsS7YB-fn9HB9YTZjXUNxvugR_7grYDd0uwuGegmkHLTcSw9U187bTZuSRNSJ5P1cvCwByuM9xNFbgAUcETVveBTWyZ0h4D0LAqXCpsePJ229-gQdKXTb9x6pVmgoomzupu0tnVTJ9uAoezIkyRa9aicUHW1msf0Ma2y7m9p7m1VQXe9bkmTkgG50VTdOf1O6120hQ8h57Ba8_jT32qTruxROMTa9P4geGiUDbY4VfX-zU6660t6L3_cwwg9tzZcSjHYea3n9LGaZioapHoQBgxS96tA59GKRcTqtoEx1N-18ljBpY-9a2v53w3gWlKP1mh6yQYCd_TEgWD1-epJMAYBqL_JS_OqCZqV8akTgDcS5DqVvU9sD6uj96cEll_1UbAN4szqiJkT_xZ-oEJl381asxmY3Le5vnwDj-0sAyEo0-rua23FB6jT4Hd3StPftO9C2RtCLPlvdOTG31YroMpUL08FGxfHcrcVcSYYmdgF7_5Qc90Q_bEa2QYNd1vYBg='
@@ -293,13 +311,10 @@ async def fetch_news(time_range):
                 if response.status != 200:
                     logger.error(f"Failed to fetch news. Status Code: {response.status}")
                     return []
-
                 html_content = await response.text()
                 soup = BeautifulSoup(html_content, "html.parser")
                 news_items = soup.find_all("div", class_="SoAPf")
-                excluded_keywords = [
-                    "Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives", "Todays Paper", "Articles Written By", "LATEST NEWS"
-                ]
+                excluded_keywords = ["Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives", "Todays Paper", "Articles Written By", "LATEST NEWS"]
 
                 results = []
                 for item in news_items:
@@ -311,8 +326,8 @@ async def fetch_news(time_range):
                     summary = item.find("div", class_="GI74Re nDgy9d")
                     summary_text = summary.text.strip() if summary else "No summary available"
 
-                    time = item.find("div", class_="OSrXXb rbYSKb LfVVr")
-                    time_text = time.text.strip() if time else "No time information"
+                    time_tag = item.find("div", class_="OSrXXb rbYSKb LfVVr")
+                    time_text = time_tag.text.strip() if time_tag else "No time information"
 
                     link_tag = item.find_parent("a", class_="WlydOe")
                     link = link_tag["href"] if link_tag else "No link available"
@@ -323,18 +338,9 @@ async def fetch_news(time_range):
                         "time": time_text,
                         "link": link,
                     })
-
                 return results
-    except aiohttp.ClientError as e:
-        logger.error(f"HTTP error occurred: {e}")
-        return []
-    except asyncio.TimeoutError:
-        logger.error("Request timed out.")
-        return []
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}")
-        return []
-    except ConnectionError as e:
         return []
 
 @app.route("/")
@@ -345,34 +351,24 @@ def index():
 def results():
     ip = get_client_ip()
     if is_rate_limited(ip):
-        response = {
+        reset_time = request_counts[ip]["reset_time"]
+        retry_after = (reset_time - datetime.now()).total_seconds()
+        return jsonify({
             'error': 'Rate limit exceeded',
-            'message': 'Please wait and try again later.You can check the real-time limit status of yours at this endpoint /rate_limit_status',
-            'status_code': 429
-        }
-        return jsonify(response), 429
+            'message': 'Please wait and try again later. You can check the real-time limit status at /rate_limit_status',
+            'status_code': 429,
+            'retry_after': retry_after
+        }), 429
 
-        # return jsonify({"error": "Rate limit exceeded. Please wait and try again later."}), 429
-        
-        # return "Error\nRate limit exceeded. Please wait and try again later\nYou can the real time limit status of yours at this endpoint  /rate_limit_status"
-    try:
-        if request.method == "POST":
-            user_choice = request.form.get("filter")
-        else:
-            user_choice = "rf"
-
-        time_range = get_time_range(user_choice)
-        news_data = asyncio.run(fetch_news(time_range))
-        return render_template("results.html", news_data=news_data)
-    except Exception as e:
-        logger.error(f"Error in /results route: {e}")
-        return render_template("error.html", error_message="An error occurred while fetching results.")
+    user_choice = request.form.get("filter") if request.method == "POST" else "rf"
+    time_range = get_time_range(user_choice)
+    news_data = asyncio.run(fetch_news(time_range))
+    return render_template("results.html", news_data=news_data)
 
 @app.route("/rate_limit_status")
 def rate_limit_status():
     ip = get_client_ip()
     now = datetime.now()
-
     if ip in request_counts:
         reset_time = request_counts[ip]["reset_time"]
         if now >= reset_time:
@@ -382,17 +378,6 @@ def rate_limit_status():
             return jsonify({"time_remaining": str(time_remaining)})
     else:
         return jsonify({"message": "No rate limit for this IP.", "time_remaining": "0 seconds"})
-
-def keep_alive():
-    while True:
-        try:
-            requests.get("http://127.0.0.1:55100")
-            print("success")
-        except:
-            logger.warning("Ping failed")
-        time.sleep(60)
-
-Thread(target=keep_alive, daemon=True).start()
 
 if __name__ == "__main__":
     app.run(debug=True, port=55100, host='0.0.0.0')
