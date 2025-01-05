@@ -226,7 +226,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 Compress(app)
 
-rate_limit = 5
+rate_limit = 10
 rate_limit_window = 43200  # 12 hours in seconds
 request_counts = defaultdict(lambda: {"count": 0, "reset_time": datetime.now()})
 lock = Lock()
