@@ -314,7 +314,7 @@ async def fetch_news(time_range):
                 html_content = await response.text()
                 soup = BeautifulSoup(html_content, "html.parser")
                 news_items = soup.find_all("div", class_="SoAPf")
-                excluded_keywords = ["Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives", "Todays Paper", "Articles Written By", "LATEST NEWS"]
+                excluded_keywords = ["Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives", "Todays Paper", "Articles Written By", "LATEST NEWS", "Irfan Yattoo", "Kashmir", "Top Stories"]
 
                 results = []
                 for item in news_items:
