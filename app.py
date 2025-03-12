@@ -388,7 +388,7 @@ def robots():
     return send_from_directory('static', 'robots.txt')
 
 @app.route('/googlef376e0fa7802dd19.html')
-def google-verify():
+def googlverify():
     return send_from_directory('static', 'googlef376e0fa7802dd19.html')
 
 if __name__ == "__main__":
