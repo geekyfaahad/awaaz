@@ -207,7 +207,7 @@
 
 # aiohttp code
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from cryptography.fernet import Fernet
 import aiohttp
 import asyncio
@@ -378,6 +378,18 @@ def rate_limit_status():
             return jsonify({"time_remaining": str(time_remaining)})
     else:
         return jsonify({"message": "No rate limit for this IP.", "time_remaining": "0 seconds"})
+        
+@app.route('/sitemap.xml')
+def sitemap():
+    return send_from_directory('static', 'sitemap.xml')
+
+@app.route('/robots.txt')
+def robots():
+    return send_from_directory('static', 'robots.txt')
+
+@app.route('/googlef376e0fa7802dd19.html')
+def google-verify():
+    return send_from_directory('static', 'googlef376e0fa7802dd19.html')
 
 if __name__ == "__main__":
     app.run(debug=True, port=55100, host='0.0.0.0')
