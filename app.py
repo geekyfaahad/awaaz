@@ -314,13 +314,25 @@ async def fetch_news(time_range):
                 html_content = await response.text()
                 soup = BeautifulSoup(html_content, "html.parser")
                 news_items = soup.find_all("div", class_="SoAPf")
-                excluded_keywords = ["Greater Kashmir", "Page 1 Archives", "National Archives", "Kashmir Latest News Archives", "Todays Paper", "Articles Written By", "LATEST NEWS", "Irfan Yattoo", "Kashmir", "Top Stories", "You searched for ramadhan 2025 ", "Video: Kashmir Observer News Roundup", "You searched for out of-syllabus ", "City", "Sports", "Editorial", "Opinion"]
+
+                excluded_keywords = [
+                    "Greater Kashmir", "Page 1 Archives", "National Archives",
+                    "Kashmir Latest News Archives", "Todays Paper", "Articles Written By",
+                    "LATEST NEWS", "Irfan Yattoo", "Kashmir", "Top Stories",
+                    "You searched for ramadhan 2025 ", "Video: Kashmir Observer News Roundup",
+                    "You searched for out of-syllabus ", "City", "Sports", "Editorial", "Opinion"
+                ]
+                excluded_url_prefixes = [
+                    "https://kashmirobserver.net/author/",
+                    "https://m.greaterkashmir.com/topic/",
+                    "https://www.greaterkashmir.com/tag/"
+                ]
 
                 results = []
                 for item in news_items:
                     headline = item.find("div", class_="n0jPhd ynAwRc MBeuO nDgy9d")
                     headline_text = headline.text.strip() if headline else "No headline available"
-                    if any(keyword in headline_text for keyword in excluded_keywords):
+                    if any(keyword.lower() in headline_text.lower() for keyword in excluded_keywords):
                         continue
 
                     summary = item.find("div", class_="GI74Re nDgy9d")
@@ -331,6 +343,10 @@ async def fetch_news(time_range):
 
                     link_tag = item.find_parent("a", class_="WlydOe")
                     link = link_tag["href"] if link_tag else "No link available"
+
+                    # URL exclusion logic
+                    if any(link.startswith(prefix) for prefix in excluded_url_prefixes):
+                        continue
 
                     results.append({
                         "headline": headline_text,
