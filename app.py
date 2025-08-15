@@ -271,6 +271,9 @@ async def fetch_news(time_range):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36"
     }
     try:
+        key = load_key()
+        # encrypted_url = b'gAAAAABonzkH9afLF1lqpAoil2jfkRTNIgRaJUVwobB3yRTW8jf8pZ1q7uHb5WhmcDLe9wDyXXwbN8fXzsyOXLOoGeqKd1nbVez-EaCmVLYvQ3oDMLzUGEV7U1qIGIre80E-SOSH9Nbh18bt4KSmUBRLBED-0gy-73YR8S56eELQVQVnb75rtru2zRY5g2qbQpARP8gJZtORMHU5cjqrR8Aa8xWzEzYR97mbCrxOnPv_O-kgstkrfVGNaTiORfcQVk9IQutcTLNYI__SKSttz9FdKUoY5u5Ge_e19qK7Td8tP8tmqTAmzZdLK6_VntYZzh4TbnDMAlMADhimLi0-I-1GTy8fOx7esf0pw-5oJBwtpXxunwEGhQlINAUoq6urE51doCnC7O9pSEiP1hZr3ogiSfX8QUp0PCtkUlPdPb_5P-EF-Ppu3OQ_sEX3RRcPZuDQb1I_SXgtUjHniS7Jeko1Vp1cy7NCZ4odsIJOYElm2P2kEsSl0QTxVS5l_O2X80183l0EyPXUQi7bWwd9K5YYwqEYYrAM_yJUEzsKC48tkRDqjTEHhyu7mbBvUxroZhe_yN3z5LUa'
+        # decrypted_url = decrypt_url(encrypted_url, key)
         # Get enabled news sources
         news_sources = get_news_sources()
         enabled_sources = [source['domain'] for source in news_sources if source.get('enabled', True)]
@@ -500,45 +503,7 @@ async def fetch_news(time_range):
                 return []
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}")
-        # Return mock data for testing if the main fetch fails
-        logger.info("Returning mock data for testing")
-        return [
-            {
-                "headline": "Kashmir News: Latest Updates from the Valley",
-                "summary": "Stay informed with the latest news and developments from Kashmir. Our comprehensive coverage brings you real-time updates from across the region.",
-                "time": "2 hours ago",
-                "link": "https://example.com/kashmir-news",
-                "image": "https://via.placeholder.com/400x200/3f51b5/ffffff?text=Kashmir+News"
-            },
-            {
-                "headline": "Breaking: Important Development in Kashmir",
-                "summary": "A significant development has been reported in the Kashmir region. Authorities are monitoring the situation closely.",
-                "time": "3 hours ago",
-                "link": "https://example.com/breaking-news",
-                "image": "https://via.placeholder.com/400x200/ff5722/ffffff?text=Breaking+News"
-            },
-            {
-                "headline": "Community Events and Cultural Activities",
-                "summary": "Discover the rich cultural heritage of Kashmir through various community events and activities happening across the region.",
-                "time": "4 hours ago",
-                "link": "https://example.com/community-events",
-                "image": "https://via.placeholder.com/400x200/4caf50/ffffff?text=Cultural+Events"
-            },
-            {
-                "headline": "Economic Development in Kashmir",
-                "summary": "New initiatives and projects are being launched to boost economic development and create opportunities in Kashmir.",
-                "time": "5 hours ago",
-                "link": "https://example.com/economic-news",
-                "image": "https://via.placeholder.com/400x200/9c27b0/ffffff?text=Economic+News"
-            },
-            {
-                "headline": "Education and Technology Updates",
-                "summary": "Latest developments in education and technology sectors in Kashmir, including new programs and initiatives.",
-                "time": "6 hours ago",
-                "link": "https://example.com/education-tech",
-                "image": "https://via.placeholder.com/400x200/607d8b/ffffff?text=Education+Tech"
-            }
-        ]
+        return []
 
 @app.route("/")
 def index():
@@ -561,179 +526,6 @@ def results():
     time_range = get_time_range(user_choice)
     news_data = asyncio.run(fetch_news(time_range))
     return render_template("results.html", news_data=news_data)
-
-@app.route("/api/news", methods=["GET"])
-def api_news():
-    """API endpoint for AJAX news requests"""
-    ip = get_client_ip()
-    if is_rate_limited(ip):
-        reset_time = request_counts[ip]["reset_time"]
-        retry_after = (reset_time - datetime.now()).total_seconds()
-        return jsonify({
-            'error': 'Rate limit exceeded',
-            'message': 'Please wait and try again later.',
-            'status_code': 429,
-            'retry_after': retry_after
-        }), 429
-
-    time_filter = request.args.get("filter", "rf")
-    time_range = get_time_range(time_filter)
-    
-    try:
-        # For testing, return mock data directly
-        mock_data = [
-            {
-                "headline": "Kashmir News: Latest Updates from the Valley",
-                "summary": "Stay informed with the latest news and developments from Kashmir. Our comprehensive coverage brings you real-time updates from across the region.",
-                "time": "2 hours ago",
-                "link": "https://example.com/kashmir-news",
-                "image": "https://via.placeholder.com/400x200/3f51b5/ffffff?text=Kashmir+News"
-            },
-            {
-                "headline": "Breaking: Important Development in Kashmir",
-                "summary": "A significant development has been reported in the Kashmir region. Authorities are monitoring the situation closely.",
-                "time": "3 hours ago",
-                "link": "https://example.com/breaking-news",
-                "image": "https://via.placeholder.com/400x200/ff5722/ffffff?text=Breaking+News"
-            },
-            {
-                "headline": "Community Events and Cultural Activities",
-                "summary": "Discover the rich cultural heritage of Kashmir through various community events and activities happening across the region.",
-                "time": "4 hours ago",
-                "link": "https://example.com/community-events",
-                "image": "https://via.placeholder.com/400x200/4caf50/ffffff?text=Cultural+Events"
-            },
-            {
-                "headline": "Economic Development in Kashmir",
-                "summary": "New initiatives and projects are being launched to boost economic development and create opportunities in Kashmir.",
-                "time": "5 hours ago",
-                "link": "https://example.com/economic-news",
-                "image": "https://via.placeholder.com/400x200/9c27b0/ffffff?text=Economic+News"
-            },
-            {
-                "headline": "Education and Technology Updates",
-                "summary": "Latest developments in education and technology sectors in Kashmir, including new programs and initiatives.",
-                "time": "6 hours ago",
-                "link": "https://example.com/education-tech",
-                "image": "https://via.placeholder.com/400x200/607d8b/ffffff?text=Education+Tech"
-            }
-        ]
-        
-        # Try to fetch real data first, fallback to mock data
-        try:
-            news_data = asyncio.run(fetch_news(time_range))
-            if not news_data:
-                news_data = mock_data
-        except Exception as fetch_error:
-            logger.warning(f"Failed to fetch real news, using mock data: {fetch_error}")
-            news_data = mock_data
-            
-        return jsonify({
-            'success': True,
-            'data': news_data,
-            'filter': time_filter,
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        logger.error(f"Error in API endpoint: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to fetch news',
-            'message': str(e)
-        }), 500
-
-@app.route("/api/news/categories", methods=["GET"])
-def api_news_categories():
-    """API endpoint to get news for all categories at once"""
-    ip = get_client_ip()
-    if is_rate_limited(ip):
-        reset_time = request_counts[ip]["reset_time"]
-        retry_after = (reset_time - datetime.now()).total_seconds()
-        return jsonify({
-            'error': 'Rate limit exceeded',
-            'message': 'Please wait and try again later.',
-            'status_code': 429,
-            'retry_after': retry_after
-        }), 429
-
-    categories = {
-        'hour': 'rf',
-        'day': 'dn', 
-        'week': 'wn',
-        'month': 'mn',
-        'year': 'yn'
-    }
-    
-    results = {}
-    
-    try:
-        # Mock data for all categories
-        mock_data = [
-            {
-                "headline": "Kashmir News: Latest Updates from the Valley",
-                "summary": "Stay informed with the latest news and developments from Kashmir. Our comprehensive coverage brings you real-time updates from across the region.",
-                "time": "2 hours ago",
-                "link": "https://example.com/kashmir-news",
-                "image": "https://via.placeholder.com/400x200/3f51b5/ffffff?text=Kashmir+News"
-            },
-            {
-                "headline": "Breaking: Important Development in Kashmir",
-                "summary": "A significant development has been reported in the Kashmir region. Authorities are monitoring the situation closely.",
-                "time": "3 hours ago",
-                "link": "https://example.com/breaking-news",
-                "image": "https://via.placeholder.com/400x200/ff5722/ffffff?text=Breaking+News"
-            },
-            {
-                "headline": "Community Events and Cultural Activities",
-                "summary": "Discover the rich cultural heritage of Kashmir through various community events and activities happening across the region.",
-                "time": "4 hours ago",
-                "link": "https://example.com/community-events",
-                "image": "https://via.placeholder.com/400x200/4caf50/ffffff?text=Cultural+Events"
-            },
-            {
-                "headline": "Economic Development in Kashmir",
-                "summary": "New initiatives and projects are being launched to boost economic development and create opportunities in Kashmir.",
-                "time": "5 hours ago",
-                "link": "https://example.com/economic-news",
-                "image": "https://via.placeholder.com/400x200/9c27b0/ffffff?text=Economic+News"
-            },
-            {
-                "headline": "Education and Technology Updates",
-                "summary": "Latest developments in education and technology sectors in Kashmir, including new programs and initiatives.",
-                "time": "6 hours ago",
-                "link": "https://example.com/education-tech",
-                "image": "https://via.placeholder.com/400x200/607d8b/ffffff?text=Education+Tech"
-            }
-        ]
-        
-        for category_name, filter_code in categories.items():
-            try:
-                time_range = get_time_range(filter_code)
-                news_data = asyncio.run(fetch_news(time_range))
-                if not news_data:
-                    news_data = mock_data
-            except Exception as fetch_error:
-                logger.warning(f"Failed to fetch real news for {category_name}, using mock data: {fetch_error}")
-                news_data = mock_data
-                
-            results[category_name] = {
-                'data': news_data,
-                'count': len(news_data),
-                'timestamp': datetime.now().isoformat()
-            }
-        
-        return jsonify({
-            'success': True,
-            'categories': results,
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        logger.error(f"Error fetching news categories via API: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to fetch news categories',
-            'message': str(e)
-        }), 500
 
 @app.route("/rate_limit_status")
 def rate_limit_status():
