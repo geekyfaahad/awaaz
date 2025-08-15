@@ -71,6 +71,17 @@
             box-shadow: var(--card-shadow);
         }
         
+        .card-img-top {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover .card-img-top {
+            transform: scale(1.05);
+        }
+        
         .card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.15);
@@ -171,6 +182,9 @@
             {% for news in news_data %}
                 <div class="col-lg-4 col-md-6 mb-4">
                     <div class="card">
+                        {% if news.image and news.image != 'No image available' %}
+                        <img src="{{ news.image }}" class="card-img-top" alt="{{ news.headline | default('News Image') }}" style="height: 200px; object-fit: cover;">
+                        {% endif %}
                         <div class="card-body">
                             <h5 class="card-title">{{ news.headline | default('No Title') }}</h5>
                             <p class="card-text">{{ news.summary | default('No Summary Available') }}</p>
