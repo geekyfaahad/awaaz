@@ -385,7 +385,7 @@ async def fetch_news(time_range, extract_images=True):
                         "link": link,
                     })
                 
-                # Now extract images concurrently for better performance
+                                # Now extract images concurrently for better performance
                 async def extract_image_for_article(article_data):
                     image_url = "No image available"
                     try:
@@ -588,8 +588,8 @@ def api_news():
             })
     
     try:
-        # Use faster loading without image extraction for initial response
-        news_data = asyncio.run(fetch_news(time_range, extract_images=False))
+        # Enable image extraction for better user experience
+        news_data = asyncio.run(fetch_news(time_range, extract_images=True))
         
         # Cache the results
         news_cache[cache_key] = (datetime.now(), news_data)
@@ -604,6 +604,41 @@ def api_news():
         return jsonify({
             'success': False,
             'error': 'Failed to fetch news',
+            'message': str(e)
+        }), 500
+
+@app.route("/api/news/with-images", methods=["GET"])
+def api_news_with_images():
+    """API endpoint for fetching news data with full image extraction"""
+    ip = get_client_ip()
+    if is_rate_limited(ip):
+        reset_time = request_counts[ip]["reset_time"]
+        retry_after = (reset_time - datetime.now()).total_seconds()
+        return jsonify({
+            'success': False,
+            'error': 'Rate limit exceeded',
+            'message': 'Please wait and try again later.',
+            'status_code': 429,
+            'retry_after': retry_after
+        }), 429
+
+    user_choice = request.args.get("filter", "rf")
+    time_range = get_time_range(user_choice)
+    
+    try:
+        # Force image extraction for this endpoint
+        news_data = asyncio.run(fetch_news(time_range, extract_images=True))
+        
+        return jsonify({
+            'success': True,
+            'data': news_data,
+            'cached': False
+        })
+    except Exception as e:
+        logger.error(f"Error in API news with images endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch news with images',
             'message': str(e)
         }), 500
 
