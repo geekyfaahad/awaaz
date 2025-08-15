@@ -303,7 +303,7 @@ async def fetch_news(time_range):
     }
     try:
         key = load_key()
-        encrypted_url = b'gAAAAABnVfRNOQIbQcd2dYcU5a0v2GCKJkqlSFPLzgj49Z90Aeo94cbSrsxeBHiChsE2zPmsb4uLTh641fimwZxa3lN_LTOQ0Oo000Qm_c5dVyU7lut0WpsS7YB-fn9HB9YTZjXUNxvugR_7grYDd0uwuGegmkHLTcSw9U187bTZuSRNSJ5P1cvCwByuM9xNFbgAUcETVveBTWyZ0h4D0LAqXCpsePJ229-gQdKXTb9x6pVmgoomzupu0tnVTJ9uAoezIkyRa9aicUHW1msf0Ma2y7m9p7m1VQXe9bkmTkgG50VTdOf1O6120hQ8h57Ba8_jT32qTruxROMTa9P4geGiUDbY4VfX-zU6660t6L3_cwwg9tzZcSjHYea3n9LGaZioapHoQBgxS96tA59GKRcTqtoEx1N-18ljBpY-9a2v53w3gWlKP1mh6yQYCd_TEgWD1-epJMAYBqL_JS_OqCZqV8akTgDcS5DqVvU9sD6uj96cEll_1UbAN4szqiJkT_xZ-oEJl381asxmY3Le5vnwDj-0sAyEo0-rua23FB6jT4Hd3StPftO9C2RtCLPlvdOTG31YroMpUL08FGxfHcrcVcSYYmdgF7_5Qc90Q_bEa2QYNd1vYBg='
+        encrypted_url = b'gAAAAABonzkH9afLF1lqpAoil2jfkRTNIgRaJUVwobB3yRTW8jf8pZ1q7uHb5WhmcDLe9wDyXXwbN8fXzsyOXLOoGeqKd1nbVez-EaCmVLYvQ3oDMLzUGEV7U1qIGIre80E-SOSH9Nbh18bt4KSmUBRLBED-0gy-73YR8S56eELQVQVnb75rtru2zRY5g2qbQpARP8gJZtORMHU5cjqrR8Aa8xWzEzYR97mbCrxOnPv_O-kgstkrfVGNaTiORfcQVk9IQutcTLNYI__SKSttz9FdKUoY5u5Ge_e19qK7Td8tP8tmqTAmzZdLK6_VntYZzh4TbnDMAlMADhimLi0-I-1GTy8fOx7esf0pw-5oJBwtpXxunwEGhQlINAUoq6urE51doCnC7O9pSEiP1hZr3ogiSfX8QUp0PCtkUlPdPb_5P-EF-Ppu3OQ_sEX3RRcPZuDQb1I_SXgtUjHniS7Jeko1Vp1cy7NCZ4odsIJOYElm2P2kEsSl0QTxVS5l_O2X80183l0EyPXUQi7bWwd9K5YYwqEYYrAM_yJUEzsKC48tkRDqjTEHhyu7mbBvUxroZhe_yN3z5LUa'
         decrypted_url = decrypt_url(encrypted_url, key)
         url = decrypted_url.format(time_range=time_range)
 
@@ -515,4 +515,5 @@ if __name__ == "__main__":
 
 # if __name__ == '__main__':
 #     app.run(debug=True, host='0.0.0.0', port=5000)
+
 
