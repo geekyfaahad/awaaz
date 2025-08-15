@@ -193,7 +193,7 @@
                                 <p class="text-muted">Select a timeframe to discover the latest news from Kashmir</p>
                             </div>
                             
-                            <form action="/results" method="post">
+                            <form id="newsForm">
                                 <div class="mb-4">
                                     <label for="filter" class="form-label">Select News Timeframe:</label>
                                     <select name="filter" id="filter" class="form-select">
@@ -204,10 +204,18 @@
                                         <option value="yn" class="news-option">Year News</option>
                                     </select>
                                 </div>
-                                <button type="submit" class="btn btn-primary mt-2">
+                                <button type="submit" class="btn btn-primary mt-2" id="getNewsBtn">
                                     <i class="fas fa-newspaper"></i> Get News
                                 </button>
                             </form>
+                            
+                            <!-- Loading indicator -->
+                            <div id="loadingIndicator" class="text-center mt-3" style="display: none;">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Fetching latest news...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -223,5 +231,60 @@
 
     <script src="{{ url_for('static', filename='js/keepAlive.js') }}" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('newsForm');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const getNewsBtn = document.getElementById('getNewsBtn');
+            
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const filter = document.getElementById('filter').value;
+                
+                // Show loading indicator
+                loadingIndicator.style.display = 'block';
+                getNewsBtn.disabled = true;
+                getNewsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                
+                try {
+                    const response = await fetch(`/api/news?filter=${filter}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Redirect to results page with the data
+                        const formData = new FormData();
+                        formData.append('filter', filter);
+                        formData.append('news_data', JSON.stringify(data.data));
+                        
+                        const resultsResponse = await fetch('/results', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (resultsResponse.ok) {
+                            const resultsHtml = await resultsResponse.text();
+                            document.open();
+                            document.write(resultsHtml);
+                            document.close();
+                        } else {
+                            throw new Error('Failed to load results page');
+                        }
+                    } else {
+                        alert('Error: ' + (data.message || 'Failed to fetch news'));
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Network error. Please try again.');
+                } finally {
+                    // Hide loading indicator
+                    loadingIndicator.style.display = 'none';
+                    getNewsBtn.disabled = false;
+                    getNewsBtn.innerHTML = '<i class="fas fa-newspaper"></i> Get News';
+                }
+            });
+        });
+    </script>
 </body>
 </html>

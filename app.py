@@ -208,9 +208,20 @@ def initialize_news_sources():
         logger.error(f"Error initializing news sources: {e}")
 
 def get_news_sources():
-    """Get news sources from Firebase"""
+    """Get news sources from Firebase with caching"""
+    global news_sources_cache, news_sources_cache_time
+    
+    # Check cache first
+    if (news_sources_cache is not None and 
+        news_sources_cache_time is not None and
+        (datetime.now() - news_sources_cache_time).total_seconds() < news_sources_cache_duration):
+        return news_sources_cache
+    
     if db is None:
-        return load_local_sources()
+        news_sources_cache = load_local_sources()
+        news_sources_cache_time = datetime.now()
+        return news_sources_cache
+    
     try:
         sources_ref = db.collection('news_sources')
         sources = []
@@ -218,11 +229,17 @@ def get_news_sources():
             source_data = doc.to_dict()
             source_data['id'] = doc.id
             sources.append(source_data)
+        
+        # Update cache
+        news_sources_cache = sources
+        news_sources_cache_time = datetime.now()
         return sources
     except Exception as e:
         logger.error(f"Error getting news sources: {e}")
         # Fallback to local
-        return load_local_sources()
+        news_sources_cache = load_local_sources()
+        news_sources_cache_time = datetime.now()
+        return news_sources_cache
 
 def is_admin_authenticated():
     """Check if user is authenticated as admin"""
@@ -266,7 +283,7 @@ def decrypt_url(encrypted_url, key):
         logger.error(f"Error decrypting URL: {e}")
         raise
 
-async def fetch_news(time_range):
+async def fetch_news(time_range, extract_images=True):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36"
     }
@@ -286,8 +303,10 @@ async def fetch_news(time_range):
         sources_query = "+OR+".join([f"site:{domain}" for domain in enabled_sources])
         url = f"https://www.google.com/search?q={sources_query}+News&sca_esv=75315e11642a04a4&tbs=qdr:{time_range}&tbm=nws"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=10) as response:
+        # Reduce timeout for faster response
+        timeout = aiohttp.ClientTimeout(total=5, connect=3)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, headers=headers) as response:
                 if response.status != 200:
                     logger.error(f"Failed to fetch news. Status Code: {response.status}")
                     return []
@@ -370,8 +389,8 @@ async def fetch_news(time_range):
                 async def extract_image_for_article(article_data):
                     image_url = "No image available"
                     try:
-                        # Fetch the actual article page to get the image
-                        async with session.get(article_data["link"], headers=headers, timeout=10) as article_response:
+                        # Fetch the actual article page to get the image with shorter timeout
+                        async with session.get(article_data["link"], headers=headers, timeout=3) as article_response:
                             if article_response.status == 200:
                                 article_html = await article_response.text()
                                 article_soup = BeautifulSoup(article_html, "html.parser")
@@ -485,9 +504,16 @@ async def fetch_news(time_range):
                     
                     return {**article_data, "image": image_url}
                 
-                # Extract images concurrently for better performance
-                if news_items_data:
-                    tasks = [extract_image_for_article(item) for item in news_items_data]
+                # Extract images concurrently for better performance with limited concurrency
+                if news_items_data and extract_images:
+                    # Limit concurrent requests to avoid overwhelming servers
+                    semaphore = asyncio.Semaphore(5)  # Max 5 concurrent requests
+                    
+                    async def extract_with_semaphore(item):
+                        async with semaphore:
+                            return await extract_image_for_article(item)
+                    
+                    tasks = [extract_with_semaphore(item) for item in news_items_data]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
                     
                     # Filter out any exceptions and ensure we have valid results
@@ -499,11 +525,87 @@ async def fetch_news(time_range):
                         valid_results.append(result)
                     
                     return valid_results
+                elif news_items_data:
+                    # Return news items without images for faster loading
+                    return [{"image": "https://via.placeholder.com/400x200/607d8b/ffffff?text=News+Article", **item} for item in news_items_data]
                 
                 return []
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}")
         return []
+
+# Add caching for news data
+news_cache = {}
+cache_duration = 300  # 5 minutes cache
+news_sources_cache = None
+news_sources_cache_time = None
+news_sources_cache_duration = 60  # 1 minute cache for news sources
+
+def cleanup_cache():
+    """Clean up expired cache entries"""
+    current_time = datetime.now()
+    expired_keys = []
+    for key, (cache_time, _) in news_cache.items():
+        if (current_time - cache_time).total_seconds() > cache_duration:
+            expired_keys.append(key)
+    
+    for key in expired_keys:
+        del news_cache[key]
+    
+    if expired_keys:
+        logger.info(f"Cleaned up {len(expired_keys)} expired cache entries")
+
+@app.route("/api/news", methods=["GET"])
+def api_news():
+    """API endpoint for fetching news data as JSON"""
+    ip = get_client_ip()
+    if is_rate_limited(ip):
+        reset_time = request_counts[ip]["reset_time"]
+        retry_after = (reset_time - datetime.now()).total_seconds()
+        return jsonify({
+            'success': False,
+            'error': 'Rate limit exceeded',
+            'message': 'Please wait and try again later.',
+            'status_code': 429,
+            'retry_after': retry_after
+        }), 429
+
+    user_choice = request.args.get("filter", "rf")
+    time_range = get_time_range(user_choice)
+    
+    # Clean up expired cache entries
+    cleanup_cache()
+    
+    # Check cache first
+    cache_key = f"{user_choice}_{time_range}"
+    if cache_key in news_cache:
+        cache_time, cached_data = news_cache[cache_key]
+        if (datetime.now() - cache_time).total_seconds() < cache_duration:
+            return jsonify({
+                'success': True,
+                'data': cached_data,
+                'cached': True
+            })
+    
+    try:
+        # Use faster loading without image extraction for initial response
+        news_data = asyncio.run(fetch_news(time_range, extract_images=False))
+        
+        # Cache the results
+        news_cache[cache_key] = (datetime.now(), news_data)
+        
+        return jsonify({
+            'success': True,
+            'data': news_data,
+            'cached': False
+        })
+    except Exception as e:
+        logger.error(f"Error in API news endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch news',
+            'message': str(e)
+        }), 500
 
 @app.route("/")
 def index():
@@ -522,9 +624,29 @@ def results():
             'retry_after': retry_after
         }), 429
 
-    user_choice = request.form.get("filter") if request.method == "POST" else "rf"
-    time_range = get_time_range(user_choice)
-    news_data = asyncio.run(fetch_news(time_range))
+    if request.method == "POST":
+        # Check if news_data is passed via AJAX
+        news_data_json = request.form.get("news_data")
+        if news_data_json:
+            try:
+                news_data = json.loads(news_data_json)
+                user_choice = request.form.get("filter", "rf")
+            except json.JSONDecodeError:
+                # Fallback to fetching news if JSON parsing fails
+                user_choice = request.form.get("filter", "rf")
+                time_range = get_time_range(user_choice)
+                news_data = asyncio.run(fetch_news(time_range))
+        else:
+            # Traditional form submission
+            user_choice = request.form.get("filter", "rf")
+            time_range = get_time_range(user_choice)
+            news_data = asyncio.run(fetch_news(time_range))
+    else:
+        # GET request
+        user_choice = "rf"
+        time_range = get_time_range(user_choice)
+        news_data = asyncio.run(fetch_news(time_range))
+    
     return render_template("results.html", news_data=news_data)
 
 @app.route("/rate_limit_status")
