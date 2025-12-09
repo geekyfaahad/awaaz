@@ -20,7 +20,7 @@
   {
     "domain": "kashmirdespatch.com",
     "name": "Kashmir Dispatch",
-    "enabled": true,
+    "enabled": false,
     "id": "kashmirdespatch.com"
   },
   {
@@ -76,5 +76,11 @@
     "domain": "https://asianewsnetwork.net/",
     "name": "AsiaNewsNetwork(ANN)",
     "enabled": true
+  },
+  {
+    "id": "https://epaper.greaterkashmir.com",
+    "domain": "https://epaper.greaterkashmir.com",
+    "name": "epaper greater kashmir",
+    "enabled": false
   }
 ]

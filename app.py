@@ -14,7 +14,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 import atexit
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, unquote
 import json
 from pathlib import Path
 import firebase_admin
@@ -25,18 +25,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
+app.secret_key = 'sdfsd232@!43f2!sad'  # Change this to a secure secret key
 Compress(app)
 
 # Firebase configuration
 FIREBASE_CONFIG = {
-    "apiKey": "AIzaSyAIY-rRT3cTHCPClUMYBsqKi0odJ1by1bQ",
-    "authDomain": "awaaz-e8330.firebaseapp.com",
-    "projectId": "awaaz-e8330",
-    "storageBucket": "awaaz-e8330.firebasestorage.app",
-    "messagingSenderId": "1070192874849",
-    "appId": "1:1070192874849:web:257894ce51625f35c7a120",
-    "measurementId": "G-R6EFGZBLK9"
+    "apiKey": "AIzaSyAaJM_bueD7iIL0mBD__2b4xHrWYzUinws",
+    "authDomain": "awaaz-4a5d9.firebaseapp.com",
+    "projectId": "awaaz-4a5d9",
+    "storageBucket": "awaaz-4a5d9.firebasestorage.app",
+    "messagingSenderId": "725877723724",
+    "appId": "1:725877723724:web:55c542c2767e5defd9dae9"
 }
 
 # Initialize Firebase Admin SDK
@@ -109,6 +108,14 @@ DEFAULT_NEWS_SOURCES = [
     {"domain": "kashmirtimes.com", "name": "Kashmir Times", "enabled": True},
     {"domain": "newsvibesofindia.com", "name": "News Vibes of India", "enabled": True},
     {"domain": "kashmirvision.in", "name": "Kashmir Vision", "enabled": True}
+]
+
+# Domains that publish international news and need strict Kashmir filtering
+# These domains will have Kashmir keywords added to their search queries
+INTERNATIONAL_NEWS_DOMAINS = [
+    "asiannewshub.com",
+    "asianewsnetwork.net",
+    "newsvibesofindia.com"
 ]
 
 ############################
@@ -282,7 +289,26 @@ def decrypt_url(encrypted_url, key):
     except Exception as e:
         logger.error(f"Error decrypting URL: {e}")
         raise
+# Keywords that indicate Kashmir-related content (used for post-fetch filtering)
+RELEVANCE_KEYWORDS = [
+    # Regions - Major
+    "kashmir", "srinagar", "jammu", "ladakh", "kashmiri",
+    # Regions - Districts
+    "kupwara", "baramulla", "anantnag", "pulwama", "shopian", 
+    "kulgam", "budgam", "ganderbal", "bandipora", "poonch", 
+    "rajouri", "doda", "kishtwar", "kathua", "udhampur", 
+    "reasi", "ramban", "leh", "kargil",
+    # Entities & Abbreviations
+    "j&k", "j and k", "j-k", "jk", "lgw",
+    # Tourist/Cultural places
+    "dal lake", "gulmarg", "pahalgam", "sonamarg", "amarnath", 
+    "vaishno devi", "patnitop", "bhaderwah", "sonmarg",
+    # Local context
+    "loc", "line of control", "uri", "handwara", "sopore", "nowgam"
+]
 
+# Keywords for Google search query (subset for query building)
+SEARCH_KEYWORDS = "kashmir OR srinagar OR jammu OR \"j&k\" OR ladakh"
 async def fetch_news(time_range, extract_images=True):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36"
@@ -300,9 +326,22 @@ async def fetch_news(time_range, extract_images=True):
             return []
         
         # Build search query with enabled sources
-        sources_query = "+OR+".join([f"site:{domain}" for domain in enabled_sources])
-        url = f"https://www.google.com/search?q={sources_query}+News&sca_esv=75315e11642a04a4&tbs=qdr:{time_range}&tbm=nws"
-
+        # Use simple site:domain syntax for all sources - post-fetch filtering handles international news
+        query_parts = []
+        for domain in enabled_sources:
+            # Clean domain (remove https:// if present)
+            clean_domain = domain.replace("https://", "").replace("http://", "").replace("www.", "").rstrip("/")
+            query_parts.append(f"site:{clean_domain}")
+        
+        # Use proper URL encoding for spaces in OR operator
+        sources_query = " OR ".join(query_parts)
+        
+        # URL encode the query properly
+        from urllib.parse import quote
+        encoded_query = quote(sources_query, safe='')
+        url = f"https://www.google.com/search?q={encoded_query}&tbs=qdr:{time_range}&tbm=nws"
+        logger.info(f"DEBUG: Generated URL length: {len(url)} chars")
+        print(url)
         # Reduce timeout for faster response
         timeout = aiohttp.ClientTimeout(total=5, connect=3)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -313,11 +352,21 @@ async def fetch_news(time_range, extract_images=True):
                 html_content = await response.text()
                 soup = BeautifulSoup(html_content, "html.parser")
                 news_items = soup.find_all("div", class_="SoAPf")
+                
+                # DEBUG: Log how many items Google returned
+                logger.info(f"DEBUG: Google returned {len(news_items)} news items from search")
+                if len(news_items) == 0:
+                    # Try alternative selectors
+                    alt_items = soup.find_all("div", {"class": lambda x: x and "SoAPf" in x}) if soup else []
+                    logger.info(f"DEBUG: Alternative selector found {len(alt_items)} items")
+                    # Also log a sample of the HTML to debug
+                    sample_html = str(soup)[:500] if soup else "No HTML"
+                    logger.info(f"DEBUG: HTML sample: {sample_html}")
 
                 excluded_keywords = [
                     "Greater Kashmir", "Page 1 Archives", "National Archives",
                     "Kashmir Latest News Archives", "Todays Paper", "Articles Written By",
-                    "LATEST NEWS", "Irfan Yattoo", "Kashmir", "Top Stories",
+                    "LATEST NEWS", "Irfan Yattoo", "Top Stories",
                     "You searched for ramadhan 2025 ", "Video: Kashmir Observer News Roundup",
                     "You searched for out of-syllabus ", "City", "Sports", "Editorial", "Opinion"
                 ]
@@ -326,7 +375,8 @@ async def fetch_news(time_range, extract_images=True):
                     "https://m.greaterkashmir.com/topic/",
                     "https://www.greaterkashmir.com/tag/",
                     "https://kashmirlife.net/tag/",
-                    "https://www.kashmirlife.net/tag/"
+                    "https://www.kashmirlife.net/tag/",
+                    "https://epaper.greaterkashmir.com",
                 ]
                 
                 # Page numbers to exclude (add specific page numbers you want to avoid)
@@ -385,15 +435,97 @@ async def fetch_news(time_range, extract_images=True):
                         "link": link,
                     })
                 
-                                # Now extract images concurrently for better performance
-                async def extract_image_for_article(article_data):
+                # Post-fetch relevance filtering: ONLY filter articles from international news domains
+                # Trusted Kashmir-focused sites (kashmirobserver, greaterkashmir, etc.) are passed through
+                def is_from_international_domain(article_link):
+                    """Check if article is from an international news domain that needs filtering"""
+                    link_lower = article_link.lower()
+                    return any(intl_domain in link_lower for intl_domain in INTERNATIONAL_NEWS_DOMAINS)
+                
+                def is_relevant_to_kashmir(article):
+                    """Check if article contains Kashmir-related keywords in headline or summary"""
+                    text_to_check = (article.get("headline", "") + " " + article.get("summary", "")).lower()
+                    return any(keyword.lower() in text_to_check for keyword in RELEVANCE_KEYWORDS)
+                
+                # Only filter articles from international domains, keep all others
+                original_count = len(news_items_data)
+                filtered_articles = []
+                
+                for item in news_items_data:
+                    if is_from_international_domain(item.get("link", "")):
+                        # Article from international domain - apply Kashmir relevance check
+                        if is_relevant_to_kashmir(item):
+                            filtered_articles.append(item)
+                        else:
+                            logger.info(f"Filtered out (no Kashmir keywords): {item.get('headline', 'Unknown')[:50]}...")
+                    else:
+                        # Article from trusted Kashmir news site - keep it
+                        filtered_articles.append(item)
+                
+                news_items_data = filtered_articles
+                filtered_count = original_count - len(news_items_data)
+                
+                if filtered_count > 0:
+                    logger.info(f"Filtered out {filtered_count} non-Kashmir articles from international domains (kept {len(news_items_data)} articles)")
+                
+                                # Now extract images AND summaries concurrently for better performance
+                async def extract_article_details(article_data):
                     image_url = "No image available"
+                    summary = article_data.get("summary", "No summary available")
+                    
                     try:
-                        # Fetch the actual article page to get the image with shorter timeout
+                        # Fetch the actual article page to get the image and summary with shorter timeout
                         async with session.get(article_data["link"], headers=headers, timeout=3) as article_response:
                             if article_response.status == 200:
                                 article_html = await article_response.text()
                                 article_soup = BeautifulSoup(article_html, "html.parser")
+                                
+                                # EXTRACT SUMMARY if not available from Google News
+                                if summary == "No summary available":
+                                    # Try meta description first (most reliable)
+                                    meta_desc = article_soup.select_one('meta[property="og:description"]') or \
+                                                article_soup.select_one('meta[name="description"]') or \
+                                                article_soup.select_one('meta[name="twitter:description"]')
+                                    
+                                    if meta_desc and meta_desc.get("content"):
+                                        extracted_summary = meta_desc.get("content").strip()
+                                        if extracted_summary and len(extracted_summary) > 20:
+                                            summary = extracted_summary[:200]
+                                            if len(extracted_summary) > 200:
+                                                summary = summary.rsplit(' ', 1)[0] + '...'
+                                            logger.info(f"Extracted summary from meta for: {article_data['headline'][:30]}...")
+                                    
+                                    # Fallback: get first paragraphs from article content
+                                    if summary == "No summary available":
+                                        paragraph_selectors = [
+                                            'article p',
+                                            '.article-content p',
+                                            '.post-content p', 
+                                            '.entry-content p',
+                                            '.content p',
+                                            '.story-content p',
+                                            '.news-content p',
+                                            'main p'
+                                        ]
+                                        
+                                        for selector in paragraph_selectors:
+                                            paragraphs = article_soup.select(selector)
+                                            if paragraphs:
+                                                # Get text from first few paragraphs, skip very short ones
+                                                text_parts = []
+                                                for p in paragraphs[:3]:
+                                                    p_text = p.get_text().strip()
+                                                    # Skip paragraphs that are too short or look like metadata
+                                                    if len(p_text) > 30 and not p_text.startswith(('By ', 'Published', 'Updated', 'Share')):
+                                                        text_parts.append(p_text)
+                                                
+                                                if text_parts:
+                                                    combined_text = ' '.join(text_parts)
+                                                    summary = combined_text[:200]
+                                                    if len(combined_text) > 200:
+                                                        summary = summary.rsplit(' ', 1)[0] + '...'
+                                                    logger.info(f"Extracted summary from paragraphs for: {article_data['headline'][:30]}...")
+                                                    break
                                 
                                 # FIRST PRIORITY: Try Open Graph and social media meta tags (what WhatsApp uses)
                                 meta_selectors = [
@@ -476,7 +608,7 @@ async def fetch_news(time_range, extract_images=True):
                                             break
                                 
                     except Exception as e:
-                        logger.warning(f"Error extracting image from {article_data['link']}: {e}")
+                        logger.warning(f"Error extracting details from {article_data['link']}: {e}")
                         image_url = "No image available"
                     
                     # Log image extraction results for debugging
@@ -502,7 +634,7 @@ async def fetch_news(time_range, extract_images=True):
                     else:
                         logger.info(f"✅ SUCCESS: Image found for '{article_data['headline'][:50]}...' -> {image_url}")
                     
-                    return {**article_data, "image": image_url}
+                    return {**article_data, "image": image_url, "summary": summary}
                 
                 # Extract images concurrently for better performance with limited concurrency
                 if news_items_data and extract_images:
@@ -511,7 +643,7 @@ async def fetch_news(time_range, extract_images=True):
                     
                     async def extract_with_semaphore(item):
                         async with semaphore:
-                            return await extract_image_for_article(item)
+                            return await extract_article_details(item)
                     
                     tasks = [extract_with_semaphore(item) for item in news_items_data]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -718,7 +850,7 @@ def admin_login():
         password = request.form.get('password')
         
         # Simple admin authentication (you should use proper authentication)
-        if username == 'admin' and password == 'admin123':  # Change these credentials
+        if username == 'geekyfaahad' and password == 'shaw666@?':  # Change these credentials
             session['admin_authenticated'] = True
             return redirect(url_for('admin_dashboard'))
         else:
