@@ -15,6 +15,5 @@
     keepAlive();
 
     // Repeat every 5 minutes (adjust interval as needed)
-    setInterval(keepAlive, 5 * 1000); // 5 seconds in milliseconds
-
+    setInterval(keepAlive, 1 * 60 * 1000); // 5 minutes in milliseconds
 })();
