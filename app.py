@@ -377,6 +377,8 @@ async def fetch_news(time_range, extract_images=True):
                     "https://kashmirlife.net/tag/",
                     "https://www.kashmirlife.net/tag/",
                     "https://epaper.greaterkashmir.com",
+                    "https://asianewsnetwork.net/category/"
+                    "https://www.thekashmirmonitor.net/politics/"
                 ]
                 
                 # Page numbers to exclude (add specific page numbers you want to avoid)
